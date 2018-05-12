@@ -1,0 +1,46 @@
+FROM ubuntu:17.10
+
+# install monero compilation dependencies
+RUN apt update && \
+	apt install -y wget curl build-essential cmake pkg-config libssl-dev libboost-all-dev libzmq3-dev libunbound-dev libsodium-dev libminiupnpc-dev libunwind8-dev liblzma-dev libreadline6-dev libldns-dev libexpat1-dev libgtest-dev && \
+	curl -sL https://deb.nodesource.com/setup_8.x | bash - && \
+	apt install nodejs && \
+	cd /usr/src/gtest && \
+	cmake . && \
+	make && \
+	mv libg* /usr/lib/
+
+RUN wget -P /tmp https://github.com/monero-project/monero/archive/v0.11.1.0.tar.gz && \
+	cd /tmp && \
+	tar xzf v0.11.1.0.tar.gz && \
+	mv monero-0.11.1.0 /usr/local/monero
+
+# COPY libwallet.so /usr/lib
+COPY artifact.tar /usr/lib
+RUN tar -xvf /usr/lib/artifact.tar -C /usr/lib
+RUN rm -f /usr/lib/atifact.tar
+
+# copy project files
+CMD mkdir /usr/local/lykke
+COPY core /usr/local/lykke/core
+COPY monero /usr/local/lykke/monero
+
+# install project dependencies, build & check c++ module
+RUN npm install -g node-gyp && \
+	cd /usr/local/lykke/monero/xmr && node-gyp rebuild && \
+	node index.js && \
+	cd /usr/local/lykke/core && npm install && \
+	cd /usr/local/lykke/monero && npm install
+
+# cleanup
+CMD rm -rf /tmp/* && apt clean
+
+# port 5000 is set in preferences
+EXPOSE 5000
+EXPOSE 9229
+
+# start sign service
+WORKDIR /usr/local/lykke/monero
+
+CMD ["node", "sign.js"]
+
